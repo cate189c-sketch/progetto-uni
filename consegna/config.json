@@ -1,0 +1,50 @@
+{
+  "capture": {
+    "width": 640,
+    "height": 360,
+    "fps": 24,
+    "source": "synthetic"
+  },
+  "network": {
+    "bind_ip": "0.0.0.0",
+    "peer_ip": "127.0.0.1",
+    "port_frames": 5555,
+    "port_cmds": 5565,
+    "chunk_bytes": 1400,
+    "timeout_ms": 180,
+    "max_pending_frames": 8,
+    "jpeg_quality": 70
+  },
+  "detection": {
+    "colors": [
+      { "name": "rosso", "bgr": [58, 72, 196], "tolerance": 60 },
+      { "name": "verde", "bgr": [96, 148, 74], "tolerance": 60 },
+      { "name": "azzurro", "bgr": [176, 128, 70], "tolerance": 60 }
+    ],
+    "min_area": 180,
+    "max_area": 20000,
+    "open_kernel": 0,
+    "nominal_area": 1500
+  },
+  "prediction": {
+    "use_kalman": true,
+    "process_noise": 28,
+    "measure_noise": 6,
+    "max_missed": 18,
+    "gate_px": 72,
+    "max_velocity": 520,
+    "min_hits": 3
+  },
+  "assist": {
+    "enabled": true,
+    "max_correction_px": 8,
+    "blend": 0.4,
+    "lead_ms": 50,
+    "max_lead_ms": 120,
+    "gate_px": 78,
+    "min_hits": 3,
+    "max_missed": 4,
+    "marker_speed": 380,
+    "cooldown_ms": 220
+  }
+}
