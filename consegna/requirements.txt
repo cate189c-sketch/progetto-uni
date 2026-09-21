@@ -1,2 +1,6 @@
 numpy>=1.26
 opencv-python>=4.9
+# Solo per capture.source="screen" (la configurazione della consegna).
+# Le sorgenti "video", "webcam" e "synthetic" non ne hanno bisogno: senza mss
+# il programma parte lo stesso e spiega cosa installare solo se serve.
+mss>=9.0        # mss() e MSS() sono entrambe supportate

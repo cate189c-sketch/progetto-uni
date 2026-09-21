@@ -28,23 +28,74 @@ def _check(cond: bool, campo: str, atteso: str, valore: Any) -> None:
         raise ConfigError(f"{campo}: atteso {atteso}, trovato {valore!r}")
 
 
+SORGENTI = ("screen", "video", "webcam", "synthetic")
+MIRE = ("center", "mouse")
+
+
 @dataclass(slots=True)
 class CaptureCfg:
+    """
+    Da dove arrivano i frame e dove sta il mirino.
+
+    `source`:
+      screen     lo schermo (o una sua regione): il gioco gira qui -> e' la
+                 modalita' della consegna
+      video      una clip registrata: stessa pipeline, risultato riproducibile
+                 senza avere il gioco installato (serve per la valutazione)
+      webcam     telecamera
+      synthetic  poligono generato qui: banco di prova deterministico per i
+                 test e per le misure del report, non il sistema
+
+    `aim_mode` e' la scelta progettuale che cambia tutto in uno sparatutto:
+      center  il mirino sta FERMO al centro dello schermo ed e' il mondo a
+              ruotare sotto. E' il caso reale: non serve leggere il puntatore
+              del sistema, non serve agganciarsi al processo del gioco. L'AI
+              dice "il bersaglio e' 12 px alla tua destra" e l'utente ruota.
+      mouse   il puntatore sopra la finestra di anteprima. Giochi a camera
+              fissa, top-down, e il poligono.
+    """
+
     width: int = 640
     height: int = 360
     fps: int = 24
-    source: str = "synthetic"  # "synthetic" | "webcam"
+    source: str = "synthetic"
+    aim_mode: str = "mouse"
+    # Regione di schermo [left, top, width, height]. Vuota = monitor intero.
+    region: list[int] = field(default_factory=list)
+    monitor: int = 1
+    video_path: str = ""
+    video_loop: bool = True
+    device: int = 0
 
     def validate(self) -> None:
         _check(64 <= self.width <= 1920, "capture.width", "64..1920", self.width)
         _check(64 <= self.height <= 1080, "capture.height", "64..1080", self.height)
         _check(1 <= self.fps <= 120, "capture.fps", "1..120", self.fps)
-        _check(
-            self.source in ("synthetic", "webcam"),
-            "capture.source",
-            "'synthetic' o 'webcam'",
-            self.source,
-        )
+        _check(self.source in SORGENTI, "capture.source", f"uno di {list(SORGENTI)}", self.source)
+        _check(self.aim_mode in MIRE, "capture.aim_mode", f"uno di {list(MIRE)}", self.aim_mode)
+        _check(self.monitor >= 0, "capture.monitor", ">= 0", self.monitor)
+        _check(self.device >= 0, "capture.device", ">= 0", self.device)
+        if self.region:
+            _check(len(self.region) == 4, "capture.region", "[left, top, width, height]", self.region)
+            _check(
+                all(isinstance(v, int) for v in self.region),
+                "capture.region",
+                "quattro interi",
+                self.region,
+            )
+            _check(self.region[2] >= 16, "capture.region[2]", ">= 16 (larghezza)", self.region[2])
+            _check(self.region[3] >= 16, "capture.region[3]", ">= 16 (altezza)", self.region[3])
+        if self.source == "video":
+            _check(bool(self.video_path), "capture.video_path", "percorso non vuoto", self.video_path)
+        # Il poligono si disegna su un canvas: non ha una regione di schermo ne'
+        # un mirino fisso al centro (li' il mirino e' il mouse dell'utente).
+        if self.source == "synthetic":
+            _check(
+                self.aim_mode == "mouse",
+                "capture.aim_mode",
+                "'mouse' con source='synthetic' (il poligono non ha un mirino fisso)",
+                self.aim_mode,
+            )
 
 
 @dataclass(slots=True)
@@ -81,9 +132,28 @@ class NetworkCfg:
 
 @dataclass(slots=True)
 class ColorCfg:
+    """
+    Un bersaglio cromatico, descritto una volta sola in BGR e interpretato
+    secondo `detection.mode`.
+
+    In BGR il riferimento e' un cubo attorno al colore: va bene su un canvas a
+    tinte piatte, non su video vero. Una maglia rossa in ombra ha gli stessi
+    RAPPORTI fra i canali ma valori molto piu' bassi, quindi esce dal cubo e il
+    bersaglio sparisce appena entra in una zona buia.
+
+    In HSV i tre assi si separano e ognuno prende la tolleranza che merita:
+    stretta sulla TINTA (`hue_tol`, il colore vero e proprio), larghissima su
+    saturazione e luminosita' (`sat_min`, `val_min` sono soglie, non finestre).
+    E' la stessa idea di prima, ma misurata lungo gli assi giusti: l'ombra
+    abbassa V e lascia H dov'era.
+    """
+
     name: str
     bgr: tuple[int, int, int]
-    tolerance: int = 72
+    tolerance: int = 72          # modalita' "bgr": semilato del cubo
+    hue_tol: int = 10            # modalita' "hsv": +/- gradi di tinta (scala OpenCV 0..179)
+    sat_min: int = 70            # sotto = grigio: la tinta non e' piu' affidabile
+    val_min: int = 50            # sotto = nero: idem
 
     def validate(self) -> None:
         _check(bool(self.name), "detection.colors[].name", "stringa non vuota", self.name)
@@ -91,13 +161,28 @@ class ColorCfg:
         for canale, v in zip("bgr", self.bgr):
             _check(0 <= v <= 255, f"detection.colors[{self.name}].bgr.{canale}", "0..255", v)
         _check(1 <= self.tolerance <= 128, f"detection.colors[{self.name}].tolerance", "1..128", self.tolerance)
+        _check(1 <= self.hue_tol <= 90, f"detection.colors[{self.name}].hue_tol", "1..90", self.hue_tol)
+        _check(0 <= self.sat_min <= 255, f"detection.colors[{self.name}].sat_min", "0..255", self.sat_min)
+        _check(0 <= self.val_min <= 255, f"detection.colors[{self.name}].val_min", "0..255", self.val_min)
+
+
+MODI_DETECTION = ("bgr", "hsv", "motion")
 
 
 @dataclass(slots=True)
 class DetectionCfg:
+    # "bgr"    soglia nel cubo BGR: esatta su colori piatti, fragile su video
+    # "hsv"    soglia su tinta + saturazione/luminosita' minime: e' il default
+    #          quando i frame arrivano da uno schermo o da una clip
+    # "motion" sottrazione dello sfondo: nessuna palette, trova cio' che si
+    #          muove. Vale solo a inquadratura ferma (vedi detection.py).
+    mode: str = "bgr"
     colors: list[ColorCfg] = field(default_factory=list)
     min_area: int = 180
     max_area: int = 20000
+    # Parametri della modalita' "motion" (MOG2).
+    motion_history: int = 240
+    motion_threshold: float = 28.0
     # Apertura morfologica: toglie il sale-e-pepe della webcam prima di cercare
     # i contorni. 0 = disattivata (sul poligono sintetico non serve).
     open_kernel: int = 0
@@ -106,7 +191,13 @@ class DetectionCfg:
     nominal_area: int = 1500
 
     def validate(self) -> None:
-        _check(bool(self.colors), "detection.colors", "almeno un colore", self.colors)
+        _check(self.mode in MODI_DETECTION, "detection.mode", f"uno di {list(MODI_DETECTION)}", self.mode)
+        # In "motion" non esiste una palette: la classe e' una sola ed e' il
+        # movimento. Pretendere dei colori sarebbe un requisito inventato.
+        if self.mode != "motion":
+            _check(bool(self.colors), "detection.colors", "almeno un colore", self.colors)
+        _check(self.motion_history >= 1, "detection.motion_history", ">= 1", self.motion_history)
+        _check(self.motion_threshold > 0, "detection.motion_threshold", "> 0", self.motion_threshold)
         _check(self.min_area >= 1, "detection.min_area", ">= 1", self.min_area)
         _check(
             self.max_area > self.min_area,
@@ -125,7 +216,8 @@ class DetectionCfg:
         )
         for c in self.colors:
             c.validate()
-        self._check_overlap()
+        if self.mode == "bgr":
+            self._check_overlap()
 
     def _check_overlap(self) -> None:
         """
@@ -191,15 +283,39 @@ class AssistCfg:
     max_missed: int = 4
     marker_speed: float = 380.0
     cooldown_ms: float = 220.0
-    # True: il punto suggerito e' la soluzione dell'intercetta (tiene conto del
-    # tempo di volo del marcatore). False: semplice estrapolazione a lead_ms.
-    use_intercept: bool = True
+    # True: il punto suggerito risolve l'intercetta, cioe' tiene conto del tempo
+    # di volo del proiettile. Serve solo quando il colpo VIAGGIA (il poligono,
+    # le armi balistiche). Con un'arma hitscan - la maggioranza degli
+    # sparatutto - il colpo arriva nel frame stesso e non c'e' niente da
+    # anticipare: default False.
+    #
+    # Anche quando e' attivo l'orizzonte totale resta tagliato a max_lead_ms:
+    # il tempo di volo e' una grandezza fisica, ma la consegna chiede una
+    # previsione moderata e un tetto esplicito e' l'unico modo di garantirla.
+    use_intercept: bool = False
 
     def validate(self) -> None:
         _check(self.max_correction_px >= 0, "assist.max_correction_px", ">= 0", self.max_correction_px)
         _check(0.0 <= self.blend <= 1.0, "assist.blend", "0.0..1.0", self.blend)
         _check(self.lead_ms >= 0, "assist.lead_ms", ">= 0", self.lead_ms)
         _check(self.max_lead_ms > 0, "assist.max_lead_ms", "> 0", self.max_lead_ms)
+        # Tetto all'orizzonte di previsione. La consegna: "non un calcolo
+        # esagerato che indovina dove sara' il nemico tra 2 secondi". Oltre un
+        # secondo il modello a velocita' costante non descrive piu' niente -
+        # e' un'estrapolazione, non una previsione - quindi e' un errore.
+        _check(
+            self.max_lead_ms <= 1000,
+            "assist.max_lead_ms",
+            "<= 1000 (oltre non e' piu' una previsione moderata)",
+            self.max_lead_ms,
+        )
+        if self.max_lead_ms > 250:
+            log.warning(
+                "assist.max_lead_ms = %.0f ms: sopra i ~250 ms l'anticipo si vede a occhio "
+                "e il colpo parte dove il bersaglio non e' ancora. Giustificalo nel report "
+                "(p.es. proiettile lento) o scendi.",
+                self.max_lead_ms,
+            )
         _check(self.gate_px >= 0, "assist.gate_px", ">= 0", self.gate_px)
         _check(self.min_hits >= 1, "assist.min_hits", ">= 1", self.min_hits)
         _check(self.max_missed >= 0, "assist.max_missed", ">= 0", self.max_missed)
@@ -262,6 +378,10 @@ def load_config(path: str | Path) -> Config:
 def config_from_dict(raw: Any) -> Config:
     if not isinstance(raw, dict):
         raise ConfigError(f"config: atteso un oggetto JSON, trovato {type(raw).__name__}")
+    # JSON non ha commenti. Le chiavi che iniziano con "_" sono trattate come
+    # tali e ignorate: senza questa convenzione l'unico modo di spiegare un
+    # parametro nel file sarebbe non spiegarlo.
+    raw = {k: v for k, v in raw.items() if not k.startswith("_")}
     ignote = set(raw) - {f.name for f in fields(Config)}
     if ignote:
         raise ConfigError(f"config: sezioni sconosciute {sorted(ignote)}")
@@ -275,11 +395,24 @@ def config_from_dict(raw: Any) -> Config:
     else:
         if not isinstance(colori_raw, list):
             raise ConfigError("detection.colors: atteso un array")
+        noti_colore = {f.name for f in fields(ColorCfg)}
+        for i, c in enumerate(colori_raw):
+            if not isinstance(c, dict):
+                raise ConfigError(f"detection.colors[{i}]: atteso un oggetto JSON")
+            ignote_c = set(c) - noti_colore
+            if ignote_c:
+                raise ConfigError(
+                    f"detection.colors[{i}]: chiavi sconosciute {sorted(ignote_c)} "
+                    f"(attese: {sorted(noti_colore)})"
+                )
         detection.colors = [
             ColorCfg(
                 name=str(c.get("name", f"colore{i}")),
                 bgr=tuple(int(v) for v in c["bgr"]),  # type: ignore[arg-type]
                 tolerance=int(c.get("tolerance", 72)),
+                hue_tol=int(c.get("hue_tol", 10)),
+                sat_min=int(c.get("sat_min", 70)),
+                val_min=int(c.get("val_min", 50)),
             )
             for i, c in enumerate(colori_raw)
         ]

@@ -1,0 +1,54 @@
+{
+  "_commento": "CONFIGURAZIONE DELLA CONSEGNA: cattura dello schermo, detection HSV, mirino fisso al centro (sparatutto in prima persona). Regola 'region' sulla finestra del gioco e i colori sul bersaglio che vuoi seguire.",
+  "capture": {
+    "width": 640,
+    "height": 360,
+    "fps": 24,
+    "source": "screen",
+    "aim_mode": "center",
+    "monitor": 1,
+    "region": [0, 0, 1280, 720]
+  },
+  "network": {
+    "bind_ip": "0.0.0.0",
+    "peer_ip": "192.168.1.50",
+    "port_frames": 5555,
+    "port_cmds": 5565,
+    "chunk_bytes": 1400,
+    "timeout_ms": 180,
+    "max_pending_frames": 8,
+    "jpeg_quality": 70
+  },
+  "detection": {
+    "mode": "hsv",
+    "colors": [
+      { "name": "nemico", "bgr": [40, 40, 220], "hue_tol": 8, "sat_min": 110, "val_min": 80 }
+    ],
+    "min_area": 120,
+    "max_area": 40000,
+    "open_kernel": 3,
+    "nominal_area": 2500
+  },
+  "prediction": {
+    "use_kalman": true,
+    "process_noise": 40,
+    "measure_noise": 9,
+    "max_missed": 12,
+    "gate_px": 90,
+    "max_velocity": 900,
+    "min_hits": 3
+  },
+  "assist": {
+    "enabled": true,
+    "max_correction_px": 6,
+    "blend": 0.35,
+    "lead_ms": 40,
+    "max_lead_ms": 120,
+    "gate_px": 70,
+    "min_hits": 3,
+    "max_missed": 4,
+    "marker_speed": 1200,
+    "cooldown_ms": 120,
+    "use_intercept": false
+  }
+}

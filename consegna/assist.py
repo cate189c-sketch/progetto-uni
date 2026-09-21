@@ -56,8 +56,15 @@ def compute_assist(
 
     `origin` e' la posizione dell'attuatore. Se c'e' e cfg.use_intercept e'
     attivo, il punto suggerito risolve l'intercetta invece di estrapolare a
-    orizzonte fisso: sul poligono il tempo di volo del marcatore (~0.5 s) pesa
-    dieci volte piu' dei 50 ms di lead, ed e' l'errore che domina il risultato.
+    orizzonte fisso: con un proiettile che viaggia (il poligono) il tempo di
+    volo ~0.5 s pesa dieci volte piu' dei 50 ms di lead ed e' l'errore che
+    domina. Con un'arma hitscan non c'e' volo e use_intercept resta spento.
+
+    In ogni caso l'orizzonte TOTALE e' tagliato a max_lead_ms. La consegna
+    chiede una previsione moderata, e il tetto e' l'unico modo di garantirla
+    per costruzione invece che per buone intenzioni: qualunque sia la
+    latenza misurata e qualunque tempo di volo risolva l'intercetta, oltre
+    quel tetto il punto suggerito non va.
 
     Nota sul contratto: il punto SUGGERITO non e' clampato - e' informazione
     mostrata all'utente ("guarda li'"), e un'informazione troncata sarebbe
@@ -76,8 +83,8 @@ def compute_assist(
             sol = solve_intercept(t.x, t.y, t.vx, t.vy, origin[0], origin[1], cfg.marker_speed)
             if sol is not None:
                 # tau (volo) + lead (latenza della misura): due ritardi distinti
-                # che si sommano.
-                return lead_position(t.x, t.y, t.vx, t.vy, sol[2] + lead)
+                # che si sommano, e la somma passa comunque sotto il tetto.
+                return lead_position(t.x, t.y, t.vx, t.vy, min(tetto, sol[2] + lead))
         return lead_position(t.x, t.y, t.vx, t.vy, lead)
 
     best: TrackSnapshot | None = None

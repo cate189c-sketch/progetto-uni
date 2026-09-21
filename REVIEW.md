@@ -8,8 +8,16 @@ Ogni difetto qui sotto è stato **riprodotto** prima di essere segnalato, e ogni
 correzione ha un test che fallisce sulla versione originale.
 
 **Cosa trovi**
-- `consegna/` — la versione Python corretta, con 68 test e un banco di misura
+- `consegna/` — la versione Python corretta, con 97 test e un banco di misura
 - `web-fixes/` — i file TypeScript corretti, con 7 test (`node --test`)
+
+> **Nota sull'ambito.** Questa revisione riguarda il prototipo basato sul
+> poligono sintetico. La consegna vera — cattura dello schermo del gioco,
+> detection su video reale, assistenza al momento della mira — è arrivata dopo,
+> e la corrispondenza fra i suoi cinque requisiti e il codice è documentata in
+> [`CONSEGNA.md`](CONSEGNA.md). I difetti elencati qui restano tutti validi: il
+> poligono non è più il sistema, ma è diventato il banco di misura, e gira con
+> lo stesso identico codice di detection, tracking, assist e rete.
 
 ---
 

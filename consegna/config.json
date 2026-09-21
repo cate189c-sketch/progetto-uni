@@ -1,9 +1,11 @@
 {
+  "_commento": "BANCO DI PROVA: poligono sintetico, gira su qualsiasi macchina senza gioco ne' schermo da catturare. Per la configurazione della consegna vedi config.gioco.json.",
   "capture": {
     "width": 640,
     "height": 360,
     "fps": 24,
-    "source": "synthetic"
+    "source": "synthetic",
+    "aim_mode": "mouse"
   },
   "network": {
     "bind_ip": "0.0.0.0",
@@ -16,6 +18,7 @@
     "jpeg_quality": 70
   },
   "detection": {
+    "mode": "bgr",
     "colors": [
       { "name": "rosso", "bgr": [58, 72, 196], "tolerance": 60 },
       { "name": "verde", "bgr": [96, 148, 74], "tolerance": 60 },
@@ -45,6 +48,7 @@
     "min_hits": 3,
     "max_missed": 4,
     "marker_speed": 380,
-    "cooldown_ms": 220
+    "cooldown_ms": 220,
+    "use_intercept": false
   }
 }

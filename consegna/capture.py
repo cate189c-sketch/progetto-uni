@@ -1,7 +1,16 @@
 """
-Sorgente frame: poligono sintetico (dischi colorati) o webcam.
-Non cattura lo schermo ne' altri processi: solo un canvas generato qui o la
-telecamera che l'utente accende esplicitamente.
+Banco di prova: il poligono sintetico e la contabilita' dei colpi.
+
+NON e' la sorgente video della consegna - quella e' `sources.ScreenSource`, che
+legge lo schermo mentre l'utente gioca. Questo modulo genera i bersagli invece
+di osservarli, e proprio per questo serve: conosce la verita' di riferimento
+(dove sta ogni bersaglio, a che velocita', quale l'utente stava puntando) e
+quindi e' l'unico posto in cui l'errore dell'assist si puo' MISURARE invece che
+descrivere. Su video vero quella verita' non esiste.
+
+Ruoli, per non confonderli nel report:
+  sources.ScreenSource  il sistema (requisito 1 della consegna)
+  capture.SyntheticArena  il banco di misura (requisiti 2 e 3, verificabili)
 """
 
 from __future__ import annotations
@@ -244,38 +253,6 @@ class SyntheticArena:
         if hud and aim:
             cv2.drawMarker(img, (int(aim[0]), int(aim[1])), INK, cv2.MARKER_CROSS, 16, 1)
         return img
-
-
-class Webcam:
-    """Wrapper sulla VideoCapture con apertura verificata e rilascio garantito."""
-
-    def __init__(self, index: int, w: int, h: int):
-        self.cap = cv2.VideoCapture(index)
-        if not self.cap.isOpened():
-            self.cap.release()
-            raise RuntimeError(
-                f"webcam {index} non disponibile. Usa capture.source='synthetic' nella config."
-            )
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
-        self.w, self.h = w, h
-
-    def read(self) -> np.ndarray | None:
-        ok, frame = self.cap.read()
-        if not ok or frame is None:
-            return None
-        if frame.shape[1] != self.w or frame.shape[0] != self.h:
-            frame = cv2.resize(frame, (self.w, self.h))
-        return frame
-
-    def close(self) -> None:
-        self.cap.release()
-
-    def __enter__(self) -> Webcam:
-        return self
-
-    def __exit__(self, *exc: Any) -> None:
-        self.close()
 
 
 def _dist_punto_segmento(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:

@@ -78,3 +78,37 @@ def test_gia_centrato_nessuna_correzione():
 def test_la_correzione_punta_verso_il_bersaglio():
     h = compute_assist((0.0, 0.0), [track(100.0, 0.0)], cfg(gate_px=200))
     assert h.dx > 0 and h.dy == pytest.approx(0.0)
+
+
+def test_l_orizzonte_di_previsione_e_tagliato_anche_con_l_intercetta():
+    """
+    Il vincolo esplicito della consegna: "non un calcolo esagerato che indovina
+    dove sara' il nemico tra 2 secondi".
+
+    L'intercetta e' fisicamente corretta ma il suo tempo di volo puo' valere
+    secondi: qui il bersaglio scappa quasi alla velocita' del proiettile,
+    quindi tau esplode. Il punto suggerito non deve comunque mai trovarsi piu'
+    in la' di max_lead_ms * velocita': il tetto vale per costruzione, non per
+    buona volonta'.
+    """
+    cfg = config_from_dict(
+        {"assist": {"use_intercept": True, "max_lead_ms": 120, "marker_speed": 380, "gate_px": 200}}
+    ).assist
+    t = track(320.0, 100.0, 360.0, 0.0)          # 360 px/s contro 380 del colpo
+    hint = compute_assist((320.0, 100.0), [t], cfg, origin=(320.0, 344.0))
+
+    assert hint.suggested is not None
+    spostamento = math.hypot(hint.suggested[0] - t.x, hint.suggested[1] - t.y)
+    massimo = (cfg.max_lead_ms / 1000.0) * math.hypot(t.vx, t.vy)
+    assert spostamento <= massimo + 1e-9
+
+
+def test_il_tetto_vale_anche_quando_la_latenza_di_rete_e_enorme():
+    # Una rete che va male non e' un permesso per indovinare piu' lontano.
+    cfg = config_from_dict({"assist": {"max_lead_ms": 120, "gate_px": 200}}).assist
+    t = track(200.0, 200.0, 300.0, -150.0)
+    hint = compute_assist((200.0, 200.0), [t], cfg, latency_s=5.0)
+
+    assert hint.suggested is not None
+    spostamento = math.hypot(hint.suggested[0] - t.x, hint.suggested[1] - t.y)
+    assert spostamento <= (cfg.max_lead_ms / 1000.0) * math.hypot(t.vx, t.vy) + 1e-9

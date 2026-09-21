@@ -41,9 +41,17 @@ class Risultato:
 
 
 def run(cfg: Config, *, assist_on: bool, segue_suggerimento: bool, shots: int,
-        aim_error: float, seed: int) -> Risultato:
+        aim_error: float, seed: int, lead_cap_ms: float = 600.0) -> Risultato:
     cfg.assist.enabled = assist_on
     cfg.assist.cooldown_ms = 0.0
+    # Sul poligono il marcatore VIAGGIA a 380 px/s: il tempo di volo (~0.5 s)
+    # e' una grandezza fisica del banco, non un indovinello, ed e' l'errore
+    # dominante. Misurare l'assist senza intercetta qui vorrebbe dire misurare
+    # un sistema diverso da quello in prova. E' l'eccezione documentata al
+    # default della consegna (armi hitscan: use_intercept=False, orizzonte
+    # 120 ms) - vedi assist.use_intercept in config.py.
+    cfg.assist.use_intercept = True
+    cfg.assist.max_lead_ms = lead_cap_ms
     rng = random.Random(seed)
     arena = SyntheticArena(cfg.capture, cfg.detection.colors, seed=seed)
     tracker = MultiTracker(cfg.prediction)
@@ -105,10 +113,14 @@ def main() -> int:
     ap.add_argument("--shots", type=int, default=200)
     ap.add_argument("--aim-error", type=float, default=18.0, help="dev. standard dell'errore di mira, px")
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--lead-cap", type=float, default=600.0,
+                    help="tetto all'orizzonte di previsione, ms (il costo del vincolo "
+                         "della consegna si misura confrontando due valori)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.ERROR)
 
-    print(f"{args.shots} colpi per condizione | errore di mira sigma = {args.aim_error} px | seed {args.seed}\n")
+    print(f"{args.shots} colpi per condizione | errore di mira sigma = {args.aim_error} px | "
+          f"seed {args.seed} | tetto orizzonte {args.lead_cap:.0f} ms\n")
     intestazione = ("condizione", "colpi", "a segno", "mancato medio", "mediana", "corr. media")
     print(f"{intestazione[0]:<26} {intestazione[1]:>6} {intestazione[2]:>9} "
           f"{intestazione[3]:>14} {intestazione[4]:>10} {intestazione[5]:>12}")
@@ -121,7 +133,8 @@ def main() -> int:
     risultati = {}
     for etichetta, assist_on, segue in condizioni:
         r = run(load_config(args.config), assist_on=assist_on, segue_suggerimento=segue,
-                shots=args.shots, aim_error=args.aim_error, seed=args.seed)
+                shots=args.shots, aim_error=args.aim_error, seed=args.seed,
+                lead_cap_ms=args.lead_cap)
         risultati[etichetta] = r
         print(f"{etichetta:<26} {r.colpi:>6} {r.hit_rate * 100:>8.1f}% "
               f"{r.dmin_media:>13.2f}p {r.dmin_mediana:>9.2f}p {r.correzione_media:>11.2f}p")
@@ -137,6 +150,9 @@ def main() -> int:
           f"{segui.hit_rate * 100:.1f}% e l'errore da {off.dmin_media:.2f} a "
           f"{segui.dmin_media:.2f} px: il valore del sistema sta nell'informazione,")
     print("non nella correzione. L'AI dice dove guardare, il giocatore decide e spara.")
+    print(f"\nOrizzonte di previsione tagliato a {args.lead_cap:.0f} ms. Rilanciare con un "
+          "--lead-cap diverso misura quanto costa il vincolo")
+    print("della consegna: e' il numero da discutere nella relazione, non da nascondere.")
     return 0
 
 
